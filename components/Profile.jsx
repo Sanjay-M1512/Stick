@@ -152,7 +152,7 @@ const Profile = () => {
 
                 <View style={styles.infoContainer}>
                     <Text style={styles.infoText}>Name: {name}</Text>
-                    <Text style={styles.infoText}>Stick ID: {stickId}</Text>
+                    <Text style={styles.infoText}>User ID: {stickId}</Text>
                     <Text style={styles.infoText}>Status: {status}</Text>
                 </View>
 

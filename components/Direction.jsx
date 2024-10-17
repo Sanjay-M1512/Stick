@@ -64,12 +64,12 @@ const Track = () => {
       const mobile = await AsyncStorage.getItem('mobile'); // Replace with your dynamic mobile number if needed
       
       // First, get the user details
-      const userDetailsResponse = await axios.get(`http://192.168.146.206:5000/get_user_email?mobile=${mobile}`);
+      const userDetailsResponse = await axios.get(`https://backend-gray-three-74.vercel.app/get_user_email?mobile=${mobile}`);
       setUserDetails(userDetailsResponse.data); // Assuming the response contains user details
       console.log('User details fetched:', userDetailsResponse.data);
 
       // Then, fetch the user's email using the mobile number
-      const emailResponse = await axios.get(`http://192.168.146.206:5000/get_user_email?mobile=${mobile}`);
+      const emailResponse = await axios.get(`https://backend-gray-three-74.vercel.app/get_user_email?mobile=${mobile}`);
       setEmail(emailResponse.data.email); // Assuming the response contains the email field
       console.log('User email fetched:', emailResponse.data.email);
 

@@ -128,7 +128,7 @@ const Login = () => {
                                 onBlur={onBlur}
                                 onChangeText={onChange}
                                 value={value}
-                                placeholder="Stick ID"
+                                placeholder="User ID"
                                 placeholderTextColor="#B0BEC5"
                                 autoCapitalize="none"
                             />
