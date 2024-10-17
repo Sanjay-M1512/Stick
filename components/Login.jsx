@@ -1,31 +1,29 @@
-import React from "react";
+import React, { useState } from "react";
 import { TouchableOpacity, ScrollView } from "react-native";
 import { Text, View, TextInput, StyleSheet } from "react-native";
 import { useForm, Controller } from 'react-hook-form';
 import Toast from 'react-native-toast-message';
-import { useState } from "react";
 import Lottie from 'lottie-react-native';
-import axios from 'axios';  // Import axios for API calls
-import { useNavigation } from '@react-navigation/native'; // Import useNavigation hook
+import axios from 'axios';  
+import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 const Login = () => {
-    const navigation = useNavigation(); // Initialize useNavigation hook
+    const navigation = useNavigation();
     const { control, handleSubmit, formState: { errors } } = useForm();
-    const [isPressed, setIsPressed] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const onSubmit = async (data) => {
         setLoading(true);
-        
         try {
-            // API call to Flask backend
-            const response = await axios.post('http://192.168.39.154:5000/login', {
+            const response = await axios.post('http://192.168.146.206:5000/login', {
                 mobile: data.mobileNumber,
                 stickId: data.stickId,
                 password: data.password,
             });
-
-            // If login is successful, navigate to the Main screen
+            await AsyncStorage.setItem('mobile', data.mobileNumber);
+            // Store user information here if needed, like token
             Toast.show({
                 text1: 'Login Successful',
                 text2: 'Welcome back!',
@@ -34,44 +32,38 @@ const Login = () => {
                 visibilityTime: 3000,
                 autoHide: true,
             });
-
+            
             setTimeout(() => navigation.navigate('Main'), 4000);
         } catch (error) {
-            // Handle error from server
-            if (error.response) {
-                const { status, data } = error.response;
-                if (status === 404) {
-                    Toast.show({
-                        text1: 'Login Failed',
-                        text2: data.error || 'Invalid mobile number or stick ID',
-                        type: 'error',
-                        position: 'top',
-                        visibilityTime: 3000,
-                        autoHide: true,
-                    });
-                } else if (status === 401) {
-                    Toast.show({
-                        text1: 'Login Failed',
-                        text2: data.error || 'Invalid password',
-                        type: 'error',
-                        position: 'top',
-                        visibilityTime: 3000,
-                        autoHide: true,
-                    });
-                }
-            } else {
-                Toast.show({
-                    text1: 'Login Failed',
-                    text2: 'An unexpected error occurred. Please try again.',
-                    type: 'error',
-                    position: 'top',
-                    visibilityTime: 3000,
-                    autoHide: true,
-                });
-            }
+            handleLoginError(error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleLoginError = (error) => {
+        if (error.response) {
+            const { status, data } = error.response;
+            const errorMessage = data.error || 'Something went wrong, please try again.';
+            if (status === 404 || status === 401) {
+                showToast('Login Failed', errorMessage, 'error');
+            } else {
+                showToast('Login Failed', 'An unexpected error occurred. Please try again.', 'error');
+            }
+        } else {
+            showToast('Login Failed', 'Network error. Please check your connection.', 'error');
+        }
+    };
+
+    const showToast = (title, message, type) => {
+        Toast.show({
+            text1: title,
+            text2: message,
+            type: type,
+            position: 'top',
+            visibilityTime: 3000,
+            autoHide: true,
+        });
     };
 
     const toastConfig = {
@@ -96,11 +88,18 @@ const Login = () => {
             <View style={styles.formContainer}>
                 <Text style={styles.title}>Login with Your Mobile</Text>
 
+                {/* Mobile Number Input */}
                 <View style={styles.inputContainer}>
                     <Controller
                         control={control}
                         name="mobileNumber"
-                        rules={{ required: 'Mobile number is required' }}
+                        rules={{ 
+                            required: 'Mobile number is required', 
+                            pattern: {
+                                value: /^[0-9]{10}$/,
+                                message: 'Invalid mobile number'
+                            }
+                        }}
                         render={({ field: { onChange, onBlur, value } }) => (
                             <TextInput
                                 style={[styles.input, errors.mobileNumber && styles.inputError]}
@@ -114,8 +113,10 @@ const Login = () => {
                             />
                         )}
                     />
+                    {errors.mobileNumber && <Text style={styles.errorText}>{errors.mobileNumber.message}</Text>}
                 </View>
 
+                {/* Stick ID Input */}
                 <View style={styles.inputContainer}>
                     <Controller
                         control={control}
@@ -133,8 +134,10 @@ const Login = () => {
                             />
                         )}
                     />
+                    {errors.stickId && <Text style={styles.errorText}>{errors.stickId.message}</Text>}
                 </View>
 
+                {/* Password Input */}
                 <View style={styles.inputContainer}>
                     <Controller
                         control={control}
@@ -152,12 +155,12 @@ const Login = () => {
                             />
                         )}
                     />
+                    {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
                 </View>
 
+                {/* Login Button */}
                 <TouchableOpacity
-                    style={[styles.button, isPressed && styles.buttonPressed]}
-                    onPressIn={() => setIsPressed(true)}
-                    onPressOut={() => setIsPressed(false)}
+                    style={styles.button}
                     onPress={handleSubmit(onSubmit)}
                     disabled={loading}
                 >
@@ -169,7 +172,7 @@ const Login = () => {
                 {/* New User option */}
                 <TouchableOpacity
                     style={styles.newUserContainer}
-                    onPress={() => navigation.navigate('Signup')} // Navigate to Signup screen
+                    onPress={() => navigation.navigate('Signup')}
                 >
                     <Text style={styles.newUserText}>New User? Sign Up Here</Text>
                 </TouchableOpacity>
@@ -241,9 +244,6 @@ const styles = StyleSheet.create({
         marginBottom: 10,
         elevation: 3,
     },
-    buttonPressed: {
-        backgroundColor: '#64B5F6',
-    },
     buttonText: {
         fontSize: 18,
         color: 'white',
@@ -257,6 +257,11 @@ const styles = StyleSheet.create({
         color: '#00796B',
         fontSize: 16,
         fontWeight: '600',
+    },
+    errorText: {
+        color: 'red',
+        fontSize: 12,
+        marginTop: 4,
     },
     toastSuccess: {
         backgroundColor: '#4CAF50',

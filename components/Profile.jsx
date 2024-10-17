@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     StyleSheet,
     Text,
@@ -11,40 +11,86 @@ import {
     Animated,
     Easing,
 } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import axios from 'axios';
+import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as tf from '@tensorflow/tfjs';
+import * as tfjs from '@tensorflow/tfjs-react-native';
 
 const Profile = () => {
-    const [profileImage, setProfileImage] = useState('https://via.placeholder.com/150'); // Default profile image
-    const [name, setName] = useState('John Doe');
-    const [userId, setUserId] = useState('12345');
+    const [profileImage, setProfileImage] = useState('https://via.placeholder.com/150');
+    const [name, setName] = useState('');
     const [stickId, setStickId] = useState('A1B2C3');
     const [status, setStatus] = useState('Active');
     const [isModalVisible, setIsModalVisible] = useState(false);
-    const fadeAnim = useState(new Animated.Value(0))[0]; // Animation for modal
+    const fadeAnim = useState(new Animated.Value(0))[0];
+    const navigation = useNavigation();
+    const [isTfReady, setIsTfReady] = useState(false);
 
-    // Function to handle image upload
+    const fetchUserDetails = async () => {
+        try {
+            const mobile = await AsyncStorage.getItem('mobile');
+            const response = await axios.get(`http://192.168.146.206:5000/get_user_details?mobile=${mobile}`);
+            const userDetails = response.data;
+            if (userDetails) {
+                setName(userDetails.name || '');
+                setStickId(userDetails.stickId || stickId);
+                setProfileImage(userDetails.profileImage || profileImage);
+                setStatus(userDetails.status || status);
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to fetch user details.');
+        }
+    };
+
+    useEffect(() => {
+        fetchUserDetails();
+    }, []);
+
+    useEffect(() => {
+        const initTensorFlow = async () => {
+            await tf.ready();
+            setIsTfReady(true);
+        };
+        initTensorFlow();
+    }, []);
+
+    const loadModel = async () => {
+        const model = await tf.loadGraphModel('path_to_yolov8_model/model.json'); // Replace with actual model path
+        return model;
+    };
+
+    const detectObjects = async (imageUri) => {
+        const model = await loadModel();
+
+        // Load and preprocess the image
+        const imgB64 = await fetch(imageUri);
+        const imgBlob = await imgB64.blob();
+        const imgArrayBuffer = await imgBlob.arrayBuffer();
+        const imgTensor = tf.browser.fromPixels(new Uint8Array(imgArrayBuffer));
+
+        // Run inference
+        const predictions = await model.executeAsync(imgTensor.expandDims(0));
+        // Process predictions (implement your processing logic here)
+        console.log(predictions);
+    };
+
     const handleImageUpload = () => {
         launchImageLibrary(
-            {
-                mediaType: 'photo',
-                quality: 1, // Full quality image
-            },
+            { mediaType: 'photo', quality: 1 },
             (response) => {
-                // Check for errors or cancellation
                 if (response.didCancel) {
                     console.log('User cancelled image picker');
                 } else if (response.error) {
-                    console.log('ImagePicker Error: ', response.error);
                     Alert.alert('Error', 'Error picking image, please try again.');
                 } else if (response.assets && response.assets.length > 0) {
-                    // Set the selected image
                     setProfileImage(response.assets[0].uri);
                 }
             }
         );
     };
 
-    // Function to handle editing profile
     const handleEditProfile = () => {
         setIsModalVisible(true);
         Animated.timing(fadeAnim, {
@@ -55,7 +101,6 @@ const Profile = () => {
         }).start();
     };
 
-    // Function to save edited profile information
     const saveProfile = () => {
         if (!name || !stickId) {
             Alert.alert('Error', 'Name and Stick ID are required!');
@@ -65,39 +110,70 @@ const Profile = () => {
         Alert.alert('Profile Updated', 'Your profile information has been updated.');
     };
 
-    // Function to handle logout
     const handleLogout = () => {
-        Alert.alert('Logout', 'You have been logged out.', [{ text: 'OK' }]);
+        Alert.alert('Logout', 'You have been logged out.', [
+            { text: 'OK', onPress: () => navigation.navigate('Login') },
+        ]);
+    };
+
+    const handleCameraPress = () => {
+        launchCamera(
+            { mediaType: 'photo', quality: 1 },
+            async (response) => {
+                if (response.didCancel) {
+                    console.log('User cancelled camera');
+                } else if (response.error) {
+                    Alert.alert('Error', 'Error opening camera, please try again.');
+                } else if (response.assets && response.assets.length > 0) {
+                    const imageUri = response.assets[0].uri;
+                    setProfileImage(imageUri); // Set captured image
+                    // Call the detectObjects function
+                    if (isTfReady) {
+                        await detectObjects(imageUri);
+                    } else {
+                        Alert.alert('TensorFlow not ready', 'Please wait for TensorFlow to load.');
+                    }
+                }
+            }
+        );
+    };
+
+    const handleNewButtonPress = () => {
+        Alert.alert('Button Pressed', 'You pressed the Speak button!');
     };
 
     return (
         <View style={styles.container}>
-        <Text style={styles.heading}>Welcome Back {name}</Text>
-        <View style={styles.header}>
-            {/* Profile Image */}
-            <TouchableOpacity onPress={handleImageUpload} style={styles.imageContainer}>
-                <Image source={{ uri: profileImage }} style={styles.profileImage} />
+            <Text style={styles.heading}>Welcome Back, {name || 'User'}!</Text>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={handleImageUpload} style={styles.imageContainer}>
+                    <Image source={{ uri: profileImage }} style={styles.profileImage} />
+                </TouchableOpacity>
+
+                <View style={styles.infoContainer}>
+                    <Text style={styles.infoText}>Name: {name}</Text>
+                    <Text style={styles.infoText}>Stick ID: {stickId}</Text>
+                    <Text style={styles.infoText}>Status: {status}</Text>
+                </View>
+
+                <View style={styles.buttonContainer}>
+                    <TouchableOpacity onPress={handleEditProfile} style={styles.editButton}>
+                        <Text style={styles.buttonText}>Edit Profile</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+                        <Text style={styles.buttonText}>Logout</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            <TouchableOpacity onPress={handleCameraPress} style={styles.lightBlueButton}>
+                <Text style={styles.buttonText}>Camera🎦</Text>
             </TouchableOpacity>
 
-            {/* User Info Container */}
-            <View style={styles.infoContainer}>
-                <Text style={styles.infoText}>Name: {name}</Text>
-                <Text style={styles.infoText}>User ID: {userId}</Text>
-                <Text style={styles.infoText}>Stick ID: {stickId}</Text>
-                <Text style={styles.infoText}>Status: {status}</Text>
-            </View>
-
-            {/* Edit and Logout Buttons */}
-            <View style={styles.buttonContainer}>
-                <TouchableOpacity onPress={handleEditProfile} style={styles.editButton}>
-                    <Text style={styles.buttonText}>Edit Profile</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-                    <Text style={styles.buttonText}>Logout</Text>
-                </TouchableOpacity>
-            </View>
-            </View>
-            {/* Modal for Editing Profile */}
+            <TouchableOpacity onPress={handleNewButtonPress} style={styles.newButton}>
+                <Text style={styles.buttonText}>Speak🎤</Text>
+            </TouchableOpacity>
+            
             <Modal
                 animationType="fade"
                 transparent={true}
@@ -128,7 +204,6 @@ const Profile = () => {
                     </View>
                 </Animated.View>
             </Modal>
-            
         </View>
     );
 };
@@ -141,16 +216,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         padding: 16,
-        backgroundColor: '#ffffff', // Keep the background color white
+        backgroundColor: '#ffffff',
     },
-    header:{
-      // flex: 1,
+    header: {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 16,
-        borderRadius:10,
-        backgroundColor: '#E0F7FA', 
-        elevation:10,// Keep the background color white
+        borderRadius: 10,
+        backgroundColor: '#E0F7FA',
+        elevation: 10,
     },
     imageContainer: {
         marginBottom: 20,
@@ -168,13 +242,9 @@ const styles = StyleSheet.create({
     infoContainer: {
         width: '100%',
         padding: 20,
-        backgroundColor: '#f8f8f8', // Light gray background for info section
+        backgroundColor: '#f8f8f8',
         borderRadius: 15,
         elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
         marginBottom: 20,
     },
     infoText: {
@@ -194,82 +264,73 @@ const styles = StyleSheet.create({
         backgroundColor: '#00796B',
         padding: 15,
         borderRadius: 10,
-        alignItems: 'center',
         marginRight: 10,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
+        alignItems: 'center',
     },
     logoutButton: {
         flex: 1,
-        backgroundColor: '#F44336', // Red color for logout
+        backgroundColor: '#F44336',
         padding: 15,
         borderRadius: 10,
-        alignItems: 'center',
         marginLeft: 10,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
+        alignItems: 'center',
     },
-    buttonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
+    lightBlueButton: {
+        backgroundColor: 'blue',
+        padding: 15,
+        borderRadius: 10,
+        marginVertical: 10,
+        width: '100%',
+        alignItems: 'center',
+    },
+    newButton: {
+        backgroundColor: 'green',
+        padding: 15,
+        borderRadius: 10,
+        marginVertical: 10,
+        width: '100%',
+        alignItems: 'center',
     },
     modalContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)', // Dark background for modal
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     modalContent: {
-        width: '85%',
+        width: '80%',
         backgroundColor: '#ffffff',
-        borderRadius: 15,
+        borderRadius: 10,
         padding: 20,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
+        elevation: 10,
     },
     modalTitle: {
-        fontSize: 24,
-        fontWeight: '600',
-        marginBottom: 20,
-        textAlign: 'center',
-        color: '#00796B',
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 10,
     },
     input: {
         borderWidth: 1,
-        borderColor: '#B0BEC5',
+        borderColor: '#ccc',
         borderRadius: 5,
         padding: 10,
-        marginBottom: 15,
-        fontSize: 16,
+        marginBottom: 10,
     },
     saveButton: {
-        backgroundColor: '#00796B',
+        backgroundColor: '#4CAF50',
         padding: 10,
         borderRadius: 5,
         alignItems: 'center',
         marginBottom: 10,
     },
     cancelButton: {
-        backgroundColor: '#E0E0E0',
+        backgroundColor: '#F44336',
         padding: 10,
         borderRadius: 5,
         alignItems: 'center',
     },
-    heading:{
-      fontSize: 24,
-        fontWeight: '600',
-        marginBottom: 20,
-        textAlign: 'center',
-        color: '#00796B',
-    }
+    buttonText: {
+        color: '#ffffff',
+        fontSize: 16,
+    },
 });

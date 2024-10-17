@@ -1,9 +1,8 @@
-import React from "react";
-import { TouchableOpacity, ScrollView } from "react-native";
-import { Text, View, TextInput, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { TouchableOpacity, ScrollView, Modal, View } from "react-native";
+import { Text, TextInput, StyleSheet } from "react-native";
 import { useForm, Controller } from 'react-hook-form';
 import Toast from 'react-native-toast-message';
-import { useState } from "react";
 import Lottie from 'lottie-react-native';
 import axios from 'axios';
 
@@ -12,6 +11,8 @@ const Signup = ({ navigation }) => {
     const [isPressed, setIsPressed] = useState(false);
     const [loading, setLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
+    const [modalVisible, setModalVisible] = useState(false);
+    const [emergencyContacts, setEmergencyContacts] = useState(["", "", ""]);
 
     const onSubmit = async (data) => {
         setLoading(true);
@@ -33,12 +34,12 @@ const Signup = ({ navigation }) => {
 
         // Send the data to the backend
         try {
-            const response = await axios.post('http://192.168.39.154:5000/register', {
+            const response = await axios.post('http://192.168.146.206:5000/register', {
                 name: data.name,
                 mobile: data.mobileNumber,
                 email: data.email,
                 stickId: data.stickId,
-                emergencyContacts: [], // Add your emergency contacts logic here
+                emergencyContacts: emergencyContacts.filter(contact => contact.trim() !== ""), // Filter out empty contacts
                 password: data.password
             });
 
@@ -53,10 +54,9 @@ const Signup = ({ navigation }) => {
             });
 
             // Navigate to Login after a delay
-            setTimeout(() => navigation.navigate('Login'), 4000); // Updated to navigate to Login
+            setTimeout(() => navigation.navigate('Login'), 4000);
         } catch (error) {
             console.error(error);
-            // Handle the error response
             if (error.response) {
                 Toast.show({
                     text1: 'Signup Failed',
@@ -79,6 +79,12 @@ const Signup = ({ navigation }) => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleEmergencyContactChange = (index, value) => {
+        const newContacts = [...emergencyContacts];
+        newContacts[index] = value;
+        setEmergencyContacts(newContacts);
     };
 
     const toastConfig = {
@@ -204,6 +210,17 @@ const Signup = ({ navigation }) => {
                     style={[styles.button, isPressed && styles.buttonPressed]}
                     onPressIn={() => setIsPressed(true)}
                     onPressOut={() => setIsPressed(false)}
+                    onPress={() => setModalVisible(true)}
+                >
+                    <Text style={styles.buttonText}>
+                        Add Emergency Contacts
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.button, isPressed && styles.buttonPressed]}
+                    onPressIn={() => setIsPressed(true)}
+                    onPressOut={() => setIsPressed(false)}
                     onPress={handleSubmit(onSubmit)}
                     disabled={loading}
                 >
@@ -212,6 +229,44 @@ const Signup = ({ navigation }) => {
                     </Text>
                 </TouchableOpacity>
             </View>
+
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={modalVisible}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalView}>
+                        {/* Close button at the top */}
+                        <TouchableOpacity
+                            style={styles.closeButton}
+                            onPress={() => setModalVisible(false)}
+                        >
+                            <Text style={styles.closeButtonText}>X</Text>
+                        </TouchableOpacity>
+
+                        <Text style={styles.modalTitle}>Emergency Contacts</Text>
+                        {emergencyContacts.map((contact, index) => (
+                            <TextInput
+                                key={index}
+                                style={styles.input}
+                                placeholder={`Contact ${index + 1}`}
+                                placeholderTextColor="#B0BEC5"
+                                value={contact}
+                                onChangeText={(value) => handleEmergencyContactChange(index, value)}
+                            />
+                        ))}
+
+                        <TouchableOpacity
+                            style={[styles.button, styles.modalButton]}
+                            onPress={() => setModalVisible(false)}
+                        >
+                            <Text style={styles.buttonText}>Save Contacts</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
 
             <Toast config={toastConfig} ref={(ref) => Toast.setRef(ref)} />
         </ScrollView>
@@ -234,83 +289,117 @@ const styles = StyleSheet.create({
     formContainer: {
         width: '90%',
         padding: 24,
-        backgroundColor: 'white',
-        borderRadius: 16,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 5,
-        borderWidth: 1,
-        borderColor: '#00796B',
-        alignItems: 'center',
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
     },
     title: {
-        fontSize: 28,
-        fontWeight: '600',
-        marginBottom: 24,
-        textAlign: 'center',
+        fontSize: 24,
+        fontWeight: 'bold',
         color: '#00796B',
+        marginBottom: 20,
+        textAlign: 'center',
     },
     inputContainer: {
-        width: '100%',
         marginBottom: 16,
     },
     input: {
-        width: '100%',
-        padding: 10,
-        fontSize: 18,
-        borderRadius: 8,
-        backgroundColor: '#F1F1F1',
-        color: '#000',
+        height: 48,
         borderColor: '#B0BEC5',
         borderWidth: 1,
-        textAlign: 'center',
+        borderRadius: 8,
+        paddingHorizontal: 16,
+        backgroundColor: '#ECEFF1',
+        width:'100%',
+        color:'black',
     },
     inputError: {
-        borderColor: 'red',
+        borderColor: '#D32F2F',
+    },
+    errorText: {
+        color: '#D32F2F',
+        marginBottom: 16,
     },
     button: {
-        width: '100%',
-        padding: 16,
-        borderRadius: 8,
-        backgroundColor: '#2196F3',
+        height: 48,
+        backgroundColor: '#00796B',
+        justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 10,
-        elevation: 3,
-    },
-    buttonPressed: {
-        backgroundColor: '#64B5F6',
+        borderRadius: 8,
+        marginBottom: 16,
+        width:'100%',
     },
     buttonText: {
-        fontSize: 18,
-        color: 'white',
-        fontWeight: '600',
-    },
-    toastSuccess: {
-        backgroundColor: '#4CAF50',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 20,
-        alignItems: 'center',
-    },
-    toastError: {
-        backgroundColor: '#F44336',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 20,
-        alignItems: 'center',
-    },
-    toastText: {
-        color: 'white',
+        color: '#FFFFFF',
         fontSize: 16,
         fontWeight: 'bold',
-        textAlign: 'center',
+    },
+    buttonPressed: {
+        opacity: 0.7,
+    },
+    toastSuccess: {
+        padding: 16,
+        backgroundColor: '#388E3C',
+        borderRadius: 8,
+    },
+    toastError: {
+        padding: 16,
+        backgroundColor: '#D32F2F',
+        borderRadius: 8,
+    },
+    toastText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
     toastSubText: {
-        color: 'white',
+        color: '#FFFFFF',
         fontSize: 14,
-        textAlign: 'center',
+    },
+    modalContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalView: {
+        width: '80%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
+        padding: 20,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 16,
+        color: '#00796B',
+    },
+    closeButton: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        backgroundColor: '#00796B',
+        borderRadius: 50,
+        width: 30,
+        height: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    closeButtonText: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    modalButton: {
+        marginTop: 16,
     },
 });
 
